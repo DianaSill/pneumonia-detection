@@ -1,0 +1,13 @@
+source venv/bin/activate   - start the env
+
+DEPENDENCIES
+pip install tensorflow matplotlib seaborn pandas scikit-learn opencv-python
+
+TensorFlow: For building and training the model.
+Matplotlib/Seaborn: For visualizing training results.
+Pandas: For handling data.
+scikit-learn: For model evaluation metrics.
+OpenCV: For loading and processing the images.
+
+pip freeze > requirements.txt 
+to create the file

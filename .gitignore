@@ -1,0 +1,19 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.Icon?
+._*
+
+# Ignore the virtual environment folder
+venv/
+
+# Ignore Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore IDE-specific files
+.vscode/
