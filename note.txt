@@ -1,19 +1,49 @@
 source venv/bin/activate   - start the env
 
-DEPENDENCIES
-pip install tensorflow matplotlib seaborn pandas scikit-learn opencv-python
-
-TensorFlow: For building and training the model.
-Matplotlib/Seaborn: For visualizing training results.
-Pandas: For handling data.
-scikit-learn: For model evaluation metrics.
-OpenCV: For loading and processing the images.
+pip install tensorflow scikit-learn numpy
 
 pip freeze > requirements.txt 
-to create the file
 
     Running the Code in VS Code
-python scripts/data_preprocessing.py
-python scripts/model.py
-python scripts/train.py
-python scripts/evaluate.py
+python scripts/pneumonia_detection.py
+
+
+----------------------------
+import tensorflow as tf
+import keras
+
+# from tensorflow.keras.models import Sequential
+from keras.api.models import Sequential
+
+# from tensorflow.keras.layers import Conv2D, MaxPooling2D
+from keras.api.layers import Conv2D, MaxPooling2D
+
+# from tensorflow.keras.preprocessing.image import ImageDataGenerator 
+from keras.src.legacy.preprocessing.image import ImageDataGenerator
+
+from keras.api.utils import image_dataset_from_directory
+
+print("TensorFlow is installed and imports work!")
+
+-----------------------------------------
+
+import tensorflow as tf
+from keras.api.utils import image_dataset_from_directory
+import numpy as np
+
+import tensorflow as tf  # Importing TensorFlow for deep learning operations.
+from keras.api.models import Sequential  # Importing Sequential for building a sequential model.
+from keras.api.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization  # Importing necessary layers for building the model.
+from keras.api.regularizers import l2  # Importing L2 regularization to penalize large weights.
+
+import tensorflow as tf  # Importing TensorFlow for deep learning operations.
+from data_preprocessing import get_data  # Importing the `get_data` function to load preprocessed training and testing data.
+from model import create_model  # Importing the `create_model` function to define and create the CNN model.
+from keras.api.callbacks import EarlyStopping  # Importing EarlyStopping to stop training early to avoid overfitting.
+from keras.api.utils import image_dataset_from_directory  # Importing image_dataset_from_directory to load image data from directories.
+
+import tensorflow as tf  # Importing TensorFlow for deep learning operations.
+from keras.api.models import load_model  # Importing `load_model` to load a saved Keras model.
+from keras.api.utils import image_dataset_from_directory  # Importing image_dataset_from_directory to load image data from a directory.
+from sklearn.metrics import classification_report, confusion_matrix  # Importing metrics for evaluation.
+import numpy as np  # Importing NumPy for numerical operations.

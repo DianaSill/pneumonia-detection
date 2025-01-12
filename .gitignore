@@ -20,6 +20,7 @@ __pycache__/
 
 # Model files
 *.h5
+*.keras
 
 chest_xray/
 
