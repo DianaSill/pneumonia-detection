@@ -1,4 +1,8 @@
-# This script defines the convolutional neural network (CNN) used for this pneumonia detection project.
+# This script defines the convolutional neural network (CNN) used for this pneumonia detection project with:
+#       Convolutional layers for feature extraction.
+#       MaxPooling layers to reduce dimensions.
+#       Fully connected layers for decision-making.
+#       A sigmoid output for binary classification (normal vs pneumonia).
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential                                       # Used to create a linear stack of layers
