@@ -19,6 +19,6 @@ __pycache__/
 .vscode/
 
 # Model files
-.h5
+*.h5
 
 chest_xray/
