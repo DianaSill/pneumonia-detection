@@ -20,3 +20,5 @@ __pycache__/
 
 # Model files
 .h5
+
+chest_xray/
