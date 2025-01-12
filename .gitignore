@@ -4,16 +4,19 @@
 .Icon?
 ._*
 
-# Ignore the virtual environment folder
+# Virtual environment folder
 venv/
 
-# Ignore Python bytecode files
+# Python bytecode files
 *.pyc
 *.pyo
 __pycache__/
 
-# Ignore Jupyter Notebook checkpoints
+# Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Ignore IDE-specific files
+# IDE-specific files
 .vscode/
+
+# Model files
+.h5

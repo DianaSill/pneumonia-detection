@@ -11,3 +11,9 @@ OpenCV: For loading and processing the images.
 
 pip freeze > requirements.txt 
 to create the file
+
+    Running the Code in VS Code
+python scripts/data_preprocessing.py
+python scripts/model.py
+python scripts/train.py
+python scripts/evaluate.py

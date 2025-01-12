@@ -25,7 +25,9 @@ train_datagen = ImageDataGenerator(
     shear_range=0.2,            # Apply random shearing transformations (tilting the images)
     zoom_range=0.2,             # Randomly zoom into the images by up to 20%
     horizontal_flip=True,       # Randomly flip images horizontally
-    fill_mode='nearest'         # Fill any empty pixels (after transformation) with the nearest pixel value
+    fill_mode='nearest',        # Fill any empty pixels (after transformation) with the nearest pixel value
+    brightness_range=[0.2, 1.0],   # Random brightness
+    channel_shift_range=10.0       # Random color shift
 )
 
 # Set up a test data generator (no augmentation, just rescaling)
@@ -50,6 +52,3 @@ test_data = test_datagen.flow_from_directory(
 # Function to return both the training and test data generators
 def get_data():
     return train_data, test_data  # Return the prepared training and testing data generators
-
-# This code prepares the training and testing data by applying various augmentations to the training images 
-# and normalizing both the training and test datasets, all while loading them directly from directories.
