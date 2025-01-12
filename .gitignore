@@ -22,3 +22,5 @@ __pycache__/
 *.h5
 
 chest_xray/
+
+backup-repository-pneumonia/
