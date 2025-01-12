@@ -1,3 +1,8 @@
+# This script:
+#       handles data loading
+#       resizing
+#       splitting the data
+
 import os                                                            # Provides a way to interact with the operating system (e.g., file paths)
 import numpy as np                                                   # Numerical computing library (used for handling arrays and matrices)
 import tensorflow as tf                                              # TensorFlow library for machine learning and deep learning
