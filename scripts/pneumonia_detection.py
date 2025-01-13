@@ -1,10 +1,9 @@
-import os
-import numpy as np
 import tensorflow as tf
 from keras.api.models import Sequential
-from keras.api.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from keras.api.layers import Dense, Dropout, GlobalAveragePooling2D
 from keras.api.callbacks import EarlyStopping, ReduceLROnPlateau
 from keras.api.preprocessing import image_dataset_from_directory
+from keras.api.applications import ResNet50
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
@@ -54,21 +53,33 @@ train_dataset = train_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 val_dataset = val_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 test_dataset = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 
-# CNN Model Architecture
-model = Sequential([
-    Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 3)),
-    MaxPooling2D(2, 2),
-    Conv2D(64, (3, 3), activation='relu'),
-    MaxPooling2D(2, 2),
-    Conv2D(128, (3, 3), activation='relu'),
-    MaxPooling2D(2, 2),
-    Flatten(),
-    Dense(512, activation='relu'),
-    Dropout(0.5),
-    Dense(1, activation='sigmoid')
+# Data Augmentation Layer
+data_augmentation = tf.keras.Sequential([
+    tf.keras.layers.RandomRotation(0.2),
+    tf.keras.layers.RandomWidth(0.2),
+    tf.keras.layers.RandomHeight(0.2),
+    tf.keras.layers.RandomZoom(0.2),
+    tf.keras.layers.RandomBrightness(0.2),
+    tf.keras.layers.RandomContrast(0.2),
 ])
 
-# Compile the model with a smaller learning rate
+# Transfer learning with ResNet50
+base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(IMG_SIZE, IMG_SIZE, 3))
+
+# Freeze the base model layers initially
+base_model.trainable = False
+
+# Model Architecture
+model = Sequential([
+    data_augmentation,  # Data Augmentation Layer
+    base_model,  # Pretrained ResNet50
+    GlobalAveragePooling2D(),  # Global Average Pooling to reduce dimensions
+    Dense(512, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)),  # Dense layer with L2 regularization
+    Dropout(0.5),  # Dropout for regularization
+    Dense(1, activation='sigmoid')  # Output layer for binary classification
+])
+
+# Compile the model with an initial learning rate
 model.compile(loss='binary_crossentropy',
               optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
               metrics=['accuracy'])
@@ -85,12 +96,32 @@ history = model.fit(
     callbacks=[early_stopping, lr_scheduler]
 )
 
-# Save the model
-model.save('pneumonia_detection_model.keras')
+# FINE-TUNE model: Unfreeze the base model layers after initial training
+base_model.trainable = True  # Unfreeze all layers of the base model
+# Freeze the first few layers of ResNet50 and fine-tune the rest
+for layer in base_model.layers[:143]:  # Freeze the first 143 layers
+    layer.trainable = False
+
+# Recompile the model with a very low learning rate for fine-tuning
+model.compile(loss='binary_crossentropy',
+              optimizer=tf.keras.optimizers.Adam(learning_rate=0.00001),
+              metrics=['accuracy'])
+
+# Continue training for more epochs with fine-tuning
+history_finetune = model.fit(
+    train_dataset,
+    # EPOCHS = 15 in the case above
+    epochs=EPOCHS,
+    validation_data=val_dataset,
+    callbacks=[early_stopping, lr_scheduler]
+)
+
+# Save the model after fine-tuning
+model.save('pneumonia_detection_model_finetuned.keras')
 
 # Plot accuracy and loss graphs
 def plot_history(history):
-    # Accuracy plot
+    # Training Accuracy vs. Validation Accuracy
     plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
     plt.plot(history.history['accuracy'], label='Training Accuracy')
@@ -100,7 +131,7 @@ def plot_history(history):
     plt.ylabel('Accuracy')
     plt.legend()
 
-    # Loss plot
+    # Training Loss vs. Validation Loss
     plt.subplot(1, 2, 2)
     plt.plot(history.history['loss'], label='Training Loss')
     plt.plot(history.history['val_loss'], label='Validation Loss')
@@ -111,7 +142,7 @@ def plot_history(history):
 
     plt.show()
 
-plot_history(history)
+plot_history(history_finetune)
 
 # Function to predict all images in a dataset
 def predict_all_images(dataset):

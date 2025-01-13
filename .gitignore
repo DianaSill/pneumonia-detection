@@ -22,8 +22,10 @@ __pycache__/
 *.h5
 *.keras
 
+#==============================
+
 chest_xray/
 
 backup-repository-pneumonia/
 
-testing_work.txt
+notes.md
