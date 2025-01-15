@@ -29,3 +29,15 @@ chest_xray/
 backup-repository-pneumonia/
 
 notes.md
+
+# Windows ===========================================
+Thumbs.db
+Desktop.ini
+
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.suo
+*.userprefs

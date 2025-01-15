@@ -7,16 +7,20 @@ from keras.api.applications import ResNet50
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
+from sklearn.utils.class_weight import compute_class_weight
+import numpy as np
 
-# Set the paths to your dataset
-TRAINING_DIR = '/Users/dianasill/Documents/Projects/PneumoniaXRayML/pneumonia_detection_model/chest_xray/train'
-VALIDATION_DIR = '/Users/dianasill/Documents/Projects/PneumoniaXRayML/pneumonia_detection_model/chest_xray/val'
-TEST_DIR = '/Users/dianasill/Documents/Projects/PneumoniaXRayML/pneumonia_detection_model/chest_xray/test'
+# %pip install tensorflow==2.16 keras==3.8 matplotlib seaborn scikit-learn notebook pandas
+
+# Set the paths to dataset
+TRAINING_DIR = 'chest_xray/train'
+VALIDATION_DIR = 'chest_xray/val'
+TEST_DIR = 'chest_xray/test'
 
 # Parameters
 IMG_SIZE = 150  # Resize the images to this size
 BATCH_SIZE = 32
-EPOCHS = 15
+EPOCHS = 25
 
 # Load and preprocess the dataset using image_dataset_from_directory
 train_dataset = image_dataset_from_directory(
@@ -24,8 +28,6 @@ train_dataset = image_dataset_from_directory(
     image_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     label_mode='binary',
-    validation_split=0.2,
-    subset="training",
     seed=123
 )
 
@@ -34,8 +36,6 @@ val_dataset = image_dataset_from_directory(
     image_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     label_mode='binary',
-    validation_split=0.2,
-    subset="validation",
     seed=123
 )
 
@@ -53,14 +53,31 @@ train_dataset = train_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 val_dataset = val_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 test_dataset = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 
-# Data Augmentation Layer
+# Extract labels from the training dataset
+train_labels = np.concatenate([y.numpy() for _, y in train_dataset])
+
+# Ensure the labels are in a flat 1D array (if not already)
+train_labels = train_labels.flatten()
+
+# Compute class weights based on the labels
+from sklearn.utils.class_weight import compute_class_weight
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=np.unique(train_labels),
+    y=train_labels
+)
+
+# Create a dictionary of class weights
+class_weights_dict = {i: class_weights[i] for i in range(len(class_weights))}
+
+# Enhanced Data Augmentation Layer
 data_augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomRotation(0.2),
-    tf.keras.layers.RandomWidth(0.2),
-    tf.keras.layers.RandomHeight(0.2),
-    tf.keras.layers.RandomZoom(0.2),
+    tf.keras.layers.RandomRotation(0.3),  # Increased rotation range
+    tf.keras.layers.RandomWidth(0.3),  # Increased width range
+    tf.keras.layers.RandomHeight(0.3),  # Increased height range
+    tf.keras.layers.RandomZoom(0.3),  # Increased zoom range
     tf.keras.layers.RandomBrightness(0.2),
-    tf.keras.layers.RandomContrast(0.2),
+    tf.keras.layers.RandomContrast(0.3),  # Increased contrast range
 ])
 
 # Transfer learning with ResNet50
@@ -74,8 +91,8 @@ model = Sequential([
     data_augmentation,  # Data Augmentation Layer
     base_model,  # Pretrained ResNet50
     GlobalAveragePooling2D(),  # Global Average Pooling to reduce dimensions
-    Dense(512, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)),  # Dense layer with L2 regularization
-    Dropout(0.5),  # Dropout for regularization
+    Dense(1024, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.02)),  # Increased L2 regularization
+    Dropout(0.7),  # Increased dropout rate to 0.7 for more regularization
     Dense(1, activation='sigmoid')  # Output layer for binary classification
 ])
 
@@ -85,8 +102,8 @@ model.compile(loss='binary_crossentropy',
               metrics=['accuracy'])
 
 # Early stopping and ReduceLROnPlateau to help stabilize the training
-early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
+early_stopping = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)  # Increased patience
+lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)  # Adjusted patience
 
 # Train the model
 history = model.fit(
@@ -98,48 +115,53 @@ history = model.fit(
 
 # FINE-TUNE model: Unfreeze the base model layers after initial training
 base_model.trainable = True  # Unfreeze all layers of the base model
-# Freeze the first few layers of ResNet50 and fine-tune the rest
+
+# Fine-tune the top layers of ResNet50 to avoid overfitting
 for layer in base_model.layers[:143]:  # Freeze the first 143 layers
     layer.trainable = False
 
 # Recompile the model with a very low learning rate for fine-tuning
 model.compile(loss='binary_crossentropy',
-              optimizer=tf.keras.optimizers.Adam(learning_rate=0.00001),
+              optimizer=tf.keras.optimizers.Adam(learning_rate=0.00001),  # Low learning rate for fine-tuning
               metrics=['accuracy'])
 
 # Continue training for more epochs with fine-tuning
 history_finetune = model.fit(
     train_dataset,
-    # EPOCHS = 15 in the case above
-    epochs=EPOCHS,
+    epochs=10,
     validation_data=val_dataset,
+    class_weight=class_weights_dict,
     callbacks=[early_stopping, lr_scheduler]
 )
 
 # Save the model after fine-tuning
 model.save('pneumonia_detection_model_finetuned.keras')
 
-# Plot accuracy and loss graphs
+# Plot accuracy and loss graphs with clear labeling
 def plot_history(history):
+    plt.figure(figsize=(14, 7))
+
     # Training Accuracy vs. Validation Accuracy
-    plt.figure(figsize=(12, 6))
     plt.subplot(1, 2, 1)
-    plt.plot(history.history['accuracy'], label='Training Accuracy')
-    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
-    plt.title('Accuracy over Epochs')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.legend()
+    plt.plot(history.history['accuracy'], label='Training Accuracy', color='blue', linestyle='-', marker='o')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy', color='orange', linestyle='--', marker='x')
+    plt.title('Accuracy Over Epochs', fontsize=16)
+    plt.xlabel('Epochs', fontsize=14)
+    plt.ylabel('Accuracy', fontsize=14)
+    plt.legend(loc='lower right', fontsize=12)
+    plt.grid(True)
 
     # Training Loss vs. Validation Loss
     plt.subplot(1, 2, 2)
-    plt.plot(history.history['loss'], label='Training Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
-    plt.title('Loss over Epochs')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
+    plt.plot(history.history['loss'], label='Training Loss', color='blue', linestyle='-', marker='o')
+    plt.plot(history.history['val_loss'], label='Validation Loss', color='orange', linestyle='--', marker='x')
+    plt.title('Loss Over Epochs', fontsize=16)
+    plt.xlabel('Epochs', fontsize=14)
+    plt.ylabel('Loss', fontsize=14)
+    plt.legend(loc='upper right', fontsize=12)
+    plt.grid(True)
 
+    plt.tight_layout()
     plt.show()
 
 plot_history(history_finetune)
@@ -156,17 +178,23 @@ def predict_all_images(dataset):
 
     return true_labels, pred_labels
 
-# Function to plot confusion matrix
+
+# Function to plot confusion matrix with improved readability
 def plot_confusion_matrix(true_labels, pred_labels):
     # Generate confusion matrix
     cm = confusion_matrix(true_labels, pred_labels)
 
     # Plot confusion matrix using Seaborn
-    plt.figure(figsize=(6, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Pneumonia'], yticklabels=['Normal', 'Pneumonia'])
-    plt.title('Confusion Matrix')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
+    plt.figure(figsize=(7, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Pneumonia'], 
+                yticklabels=['Normal', 'Pneumonia'], cbar_kws={'label': 'Number of Predictions'}, 
+                annot_kws={"size": 16}, linewidths=0.5)
+
+    # Add titles and labels
+    plt.title('Confusion Matrix', fontsize=16)
+    plt.xlabel('Predicted Label', fontsize=14)
+    plt.ylabel('True Label', fontsize=14)
+
     plt.show()
 
 # Get predictions for the validation set
