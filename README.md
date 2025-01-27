@@ -1,6 +1,6 @@
 # Pneumonia Detection Using Deep Learning and ResNet50
 
-This project involves building a deep learning model to detect pneumonia from chest X-ray images. Leveraging transfer learning with ResNet50, I trained and fine-tuned a robust model to classify images into "Normal" and "Pneumonia" categories.
+This project involves building a deep learning model to detect pneumonia from chest X-ray images. Leveraging transfer learning with ResNet50, I trained and fine-tuned a model to classify images into "Normal" and "Pneumonia" categories.
 
 ![xray images on loop](pneumonia-deep-learning.gif)
 
