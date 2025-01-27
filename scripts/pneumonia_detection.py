@@ -10,7 +10,6 @@ import seaborn as sns
 from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
 
-# %pip install tensorflow==2.16 keras==3.8 matplotlib seaborn scikit-learn notebook pandas
 
 # Set the paths to dataset
 TRAINING_DIR = 'chest_xray/train'
@@ -18,9 +17,10 @@ VALIDATION_DIR = 'chest_xray/val'
 TEST_DIR = 'chest_xray/test'
 
 # Parameters
-IMG_SIZE = 150  # Resize the images to this size
+IMG_SIZE = 224  # Resizing
 BATCH_SIZE = 32
-EPOCHS = 25
+EPOCHS = 30
+
 
 # Load and preprocess the dataset using image_dataset_from_directory
 train_dataset = image_dataset_from_directory(
@@ -53,14 +53,12 @@ train_dataset = train_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 val_dataset = val_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 test_dataset = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 
+
 # Extract labels from the training dataset
 train_labels = np.concatenate([y.numpy() for _, y in train_dataset])
-
-# Ensure the labels are in a flat 1D array (if not already)
-train_labels = train_labels.flatten()
+train_labels = train_labels.flatten()  # Ensure the labels are in a flat 1D array
 
 # Compute class weights based on the labels
-from sklearn.utils.class_weight import compute_class_weight
 class_weights = compute_class_weight(
     class_weight='balanced',
     classes=np.unique(train_labels),
@@ -70,103 +68,168 @@ class_weights = compute_class_weight(
 # Create a dictionary of class weights
 class_weights_dict = {i: class_weights[i] for i in range(len(class_weights))}
 
-# Enhanced Data Augmentation Layer
+
+# Enhanced Data Augmentation Layer using tf.keras.layers
 data_augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomRotation(0.3),  # Increased rotation range
-    tf.keras.layers.RandomWidth(0.3),  # Increased width range
-    tf.keras.layers.RandomHeight(0.3),  # Increased height range
-    tf.keras.layers.RandomZoom(0.3),  # Increased zoom range
-    tf.keras.layers.RandomBrightness(0.2),
-    tf.keras.layers.RandomContrast(0.3),  # Increased contrast range
+    tf.keras.layers.RandomRotation(0.25),   # Rotate up to 25% of 360 degrees
+    tf.keras.layers.RandomZoom(0.25),       # Zoom randomly up to 25%
+    tf.keras.layers.RandomWidth(0.2),       # Random width shift up to 20%
+    tf.keras.layers.RandomHeight(0.2),      # Random height shift up to 20%
+    tf.keras.layers.RandomContrast(0.3),    # Randomly adjust contrast up to 30%
+    tf.keras.layers.RandomBrightness(0.2),  # Randomly adjust brightness up to 20%
 ])
+
 
 # Transfer learning with ResNet50
 base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(IMG_SIZE, IMG_SIZE, 3))
-
-# Freeze the base model layers initially
-base_model.trainable = False
+base_model.trainable = False  # Freeze the base model layers initially
 
 # Model Architecture
 model = Sequential([
-    data_augmentation,  # Data Augmentation Layer
+    data_augmentation,  # D.A. Layer
     base_model,  # Pretrained ResNet50
     GlobalAveragePooling2D(),  # Global Average Pooling to reduce dimensions
-    Dense(1024, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.02)),  # Increased L2 regularization
-    Dropout(0.7),  # Increased dropout rate to 0.7 for more regularization
+    Dense(1024, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.02)),  # Dense with L2 regularization
+    Dropout(0.7),  # Dropout rate set to 0.7 for regularization
     Dense(1, activation='sigmoid')  # Output layer for binary classification
 ])
 
 # Compile the model with an initial learning rate
-model.compile(loss='binary_crossentropy',
-              optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
-              metrics=['accuracy'])
+model.compile(
+    loss='binary_crossentropy',
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+    metrics=['accuracy']
+)
+
 
 # Early stopping and ReduceLROnPlateau to help stabilize the training
-early_stopping = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)  # Increased patience
-lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)  # Adjusted patience
+early_stopping = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
+lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)
+
 
 # Train the model
 history = model.fit(
     train_dataset,
     epochs=EPOCHS,
     validation_data=val_dataset,
+    class_weight=class_weights_dict,  # Explicitly use class weights
     callbacks=[early_stopping, lr_scheduler]
 )
+
 
 # FINE-TUNE model: Unfreeze the base model layers after initial training
 base_model.trainable = True  # Unfreeze all layers of the base model
 
-# Fine-tune the top layers of ResNet50 to avoid overfitting
-for layer in base_model.layers[:143]:  # Freeze the first 143 layers
+# Fine-tune more layers to avoid overfitting
+for layer in base_model.layers[:100]:  # Freeze the first 100 layers
     layer.trainable = False
 
-# Recompile the model with a very low learning rate for fine-tuning
-model.compile(loss='binary_crossentropy',
-              optimizer=tf.keras.optimizers.Adam(learning_rate=0.00001),  # Low learning rate for fine-tuning
-              metrics=['accuracy'])
+
+# ----
+# Define the custom cyclical learning rate schedule
+class CyclicalLearningRate(tf.keras.optimizers.schedules.LearningRateSchedule):
+    def __init__(self, initial_lr, maximal_lr, step_size):
+        self.initial_lr = initial_lr
+        self.maximal_lr = maximal_lr
+        self.step_size = step_size
+
+    def __call__(self, step):
+        cycle = tf.floor(1 + step / (2 * self.step_size))
+        x = tf.abs(step / self.step_size - 2 * cycle + 1)
+        lr = self.initial_lr + (self.maximal_lr - self.initial_lr) * tf.maximum(0., (1 - x))
+        return lr
+    
+    def get_config(self):
+        # Return a dictionary of configuration values
+        return {
+            "initial_lr": self.initial_lr,
+            "maximal_lr": self.maximal_lr,
+            "step_size": self.step_size
+        }
+
+# Set your desired values for initial learning rate, maximal learning rate, and step size
+initial_lr = 1e-5
+maximal_lr = 1e-4
+step_size = 500  # Number of steps per cycle
+
+# Instantiate the cyclical learning rate schedule
+lr_schedule = CyclicalLearningRate(initial_lr, maximal_lr, step_size)
+
+# Compile the model with the cyclical learning rate schedule
+model.compile(
+    loss='binary_crossentropy',
+    optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
+    metrics=['accuracy']
+)
+
 
 # Continue training for more epochs with fine-tuning
 history_finetune = model.fit(
     train_dataset,
-    epochs=10,
+    epochs=15,
     validation_data=val_dataset,
     class_weight=class_weights_dict,
-    callbacks=[early_stopping, lr_scheduler]
+    callbacks=[early_stopping]
 )
+
+
+# ---------------- Not as good - replaced with cyclical learning    ----------------
+# Exponential Decay Learning Rate Schedule for Fine-Tuning
+# lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+#     initial_learning_rate=1e-5,
+#     decay_steps=1000,
+#     decay_rate=0.9,
+#     staircase=True
+# )
+
+# # Recompile the model with a learning rate schedule for fine-tuning
+# model.compile(
+#     loss='binary_crossentropy',
+#     optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
+#     metrics=['accuracy']
+# )
+
+# # Continue training for more epochs with fine-tuning
+# history_finetune = model.fit(
+#     train_dataset,
+#     epochs=15,
+#     validation_data=val_dataset,
+#     class_weight=class_weights_dict,
+#     callbacks=[early_stopping, lr_scheduler]
+# )
+# -------
+
 
 # Save the model after fine-tuning
 model.save('pneumonia_detection_model_finetuned.keras')
 
-# Plot accuracy and loss graphs with clear labeling
+
+# Plot accuracy and loss graphs
 def plot_history(history):
     plt.figure(figsize=(14, 7))
 
-    # Training Accuracy vs. Validation Accuracy
     plt.subplot(1, 2, 1)
-    plt.plot(history.history['accuracy'], label='Training Accuracy', color='blue', linestyle='-', marker='o')
-    plt.plot(history.history['val_accuracy'], label='Validation Accuracy', color='orange', linestyle='--', marker='x')
-    plt.title('Accuracy Over Epochs', fontsize=16)
-    plt.xlabel('Epochs', fontsize=14)
-    plt.ylabel('Accuracy', fontsize=14)
-    plt.legend(loc='lower right', fontsize=12)
-    plt.grid(True)
+    plt.plot(history.history['accuracy'], label='Training Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.title('Accuracy Over Epochs')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
 
-    # Training Loss vs. Validation Loss
     plt.subplot(1, 2, 2)
-    plt.plot(history.history['loss'], label='Training Loss', color='blue', linestyle='-', marker='o')
-    plt.plot(history.history['val_loss'], label='Validation Loss', color='orange', linestyle='--', marker='x')
-    plt.title('Loss Over Epochs', fontsize=16)
-    plt.xlabel('Epochs', fontsize=14)
-    plt.ylabel('Loss', fontsize=14)
-    plt.legend(loc='upper right', fontsize=12)
-    plt.grid(True)
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Loss Over Epochs')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
 
-    plt.tight_layout()
     plt.show()
 
 plot_history(history_finetune)
 
-# Function to predict all images in a dataset
+
+# Function to predict all images in the dataset
 def predict_all_images(dataset):
     true_labels = []
     pred_labels = []
@@ -179,40 +242,24 @@ def predict_all_images(dataset):
     return true_labels, pred_labels
 
 
-# Function to plot confusion matrix with improved readability
+# Plot confusion matrix
 def plot_confusion_matrix(true_labels, pred_labels):
-    # Generate confusion matrix
     cm = confusion_matrix(true_labels, pred_labels)
-
-    # Plot confusion matrix using Seaborn
     plt.figure(figsize=(7, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Pneumonia'], 
-                yticklabels=['Normal', 'Pneumonia'], cbar_kws={'label': 'Number of Predictions'}, 
-                annot_kws={"size": 16}, linewidths=0.5)
-
-    # Add titles and labels
-    plt.title('Confusion Matrix', fontsize=16)
-    plt.xlabel('Predicted Label', fontsize=14)
-    plt.ylabel('True Label', fontsize=14)
-
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Pneumonia'], yticklabels=['Normal', 'Pneumonia'])
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.title('Confusion Matrix')
     plt.show()
 
-# Get predictions for the validation set
-true_labels, pred_labels = predict_all_images(val_dataset)
 
-# Print the results for the validation set
+# Validate and test model
+true_labels, pred_labels = predict_all_images(val_dataset)
 print("Validation Set Results:")
-print("Classification Report:")
 print(classification_report(true_labels, pred_labels, target_names=['Normal', 'Pneumonia']))
-print("\nConfusion Matrix:")
 plot_confusion_matrix(true_labels, pred_labels)
 
-# Get predictions for the test set
 true_labels_test, pred_labels_test = predict_all_images(test_dataset)
-
-# Print the results for the test set
 print("Test Set Results:")
-print("Classification Report:")
 print(classification_report(true_labels_test, pred_labels_test, target_names=['Normal', 'Pneumonia']))
-print("\nConfusion Matrix:")
 plot_confusion_matrix(true_labels_test, pred_labels_test)
