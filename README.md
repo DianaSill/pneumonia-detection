@@ -61,7 +61,7 @@ For this project, I used a combination of a custom Convolutional Neural Network 
 - **Output Layer**: This layer used a sigmoid activation function for binary classification (Normal vs. Pneumonia).
 
 ### Model Compilation
-We compiled the model using the following settings:
+Compiled the model using the following settings:
 - **Optimizer**: Adam
 - **Loss Function**: Categorical Crossentropy
 - **Learning Rate**: Started with a learning rate of 0.0001 and reduced it during training to improve performance.
@@ -182,7 +182,7 @@ Both files are functionally identical, providing flexibility in how you would li
 
 ## Conclusion
 
-This project shows a successful application of deep learning in medical imaging. The model achieved an good 93% accuracy on the test set, with balanced precision and recall across both classes. This highlights the potential of AI in assisting medical professionals with pneumonia detection.
+This project shows an application of deep learning in medical imaging. The model achieved an good 93% accuracy on the test set, with balanced precision and recall across both classes. This highlights the potential of AI in assisting medical professionals with pneumonia detection.
 
 ### Key Takeaways:
 - The CNN effectively identified pneumonia from chest X-rays with high accuracy.
