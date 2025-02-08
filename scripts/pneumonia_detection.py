@@ -11,13 +11,13 @@ from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
 
 
-# Set the paths to dataset
+# Paths to dataset
 TRAINING_DIR = 'chest_xray/train'
 VALIDATION_DIR = 'chest_xray/val'
 TEST_DIR = 'chest_xray/test'
 
 # Parameters
-IMG_SIZE = 224  # Resizing
+IMG_SIZE = 224  # Resizing <
 BATCH_SIZE = 32
 EPOCHS = 30
 
@@ -56,7 +56,7 @@ test_dataset = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 
 # Extract labels from the training dataset
 train_labels = np.concatenate([y.numpy() for _, y in train_dataset])
-train_labels = train_labels.flatten()  # Ensure the labels are in a flat 1D array
+train_labels = train_labels.flatten()  # Labels are in a FLAT 1D array
 
 # Compute class weights based on the labels
 class_weights = compute_class_weight(
@@ -71,7 +71,7 @@ class_weights_dict = {i: class_weights[i] for i in range(len(class_weights))}
 
 # Enhanced Data Augmentation Layer using tf.keras.layers
 data_augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomRotation(0.25),   # Rotate up to 25% of 360 degrees
+    tf.keras.layers.RandomRotation(0.25),   # Rotate up to 25% of 360
     tf.keras.layers.RandomZoom(0.25),       # Zoom randomly up to 25%
     tf.keras.layers.RandomWidth(0.2),       # Random width shift up to 20%
     tf.keras.layers.RandomHeight(0.2),      # Random height shift up to 20%
@@ -86,15 +86,15 @@ base_model.trainable = False  # Freeze the base model layers initially
 
 # Model Architecture
 model = Sequential([
-    data_augmentation,  # D.A. Layer
+    data_augmentation,
     base_model,  # Pretrained ResNet50
-    GlobalAveragePooling2D(),  # Global Average Pooling to reduce dimensions
+    GlobalAveragePooling2D(),  # Global Average Pooling to reduce dimensions of
     Dense(1024, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.02)),  # Dense with L2 regularization
-    Dropout(0.7),  # Dropout rate set to 0.7 for regularization
-    Dense(1, activation='sigmoid')  # Output layer for binary classification
+    Dropout(0.7),  # Rate set to 0.7 for regularization
+    Dense(1, activation='sigmoid')  # Output layer for binary classification - normal - pneumonia
 ])
 
-# Compile the model with an initial learning rate
+# Compile the model with an initial learning rate - ADAM
 model.compile(
     loss='binary_crossentropy',
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
@@ -102,7 +102,7 @@ model.compile(
 )
 
 
-# Early stopping and ReduceLROnPlateau to help stabilize the training
+# Help stabilize the training
 early_stopping = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
 lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=1e-6)
 
@@ -112,7 +112,7 @@ history = model.fit(
     train_dataset,
     epochs=EPOCHS,
     validation_data=val_dataset,
-    class_weight=class_weights_dict,  # Explicitly use class weights
+    class_weight=class_weights_dict,  # EXPLICITLY  use class weights
     callbacks=[early_stopping, lr_scheduler]
 )
 
@@ -125,7 +125,7 @@ for layer in base_model.layers[:100]:  # Freeze the first 100 layers
     layer.trainable = False
 
 
-# ----
+# ---- (checks)
 # Define the custom cyclical learning rate schedule
 class CyclicalLearningRate(tf.keras.optimizers.schedules.LearningRateSchedule):
     def __init__(self, initial_lr, maximal_lr, step_size):
@@ -147,7 +147,7 @@ class CyclicalLearningRate(tf.keras.optimizers.schedules.LearningRateSchedule):
             "step_size": self.step_size
         }
 
-# Set your desired values for initial learning rate, maximal learning rate, and step size
+# Desired values for initial learning rate, maximal learning rate, and step size
 initial_lr = 1e-5
 maximal_lr = 1e-4
 step_size = 500  # Number of steps per cycle
@@ -173,7 +173,7 @@ history_finetune = model.fit(
 )
 
 
-# ---------------- Not as good - replaced with cyclical learning    ----------------
+# ---------------- Not as good - replaced with cyclical learning  - check notion on why  ----------------
 # Exponential Decay Learning Rate Schedule for Fine-Tuning
 # lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
 #     initial_learning_rate=1e-5,
@@ -200,7 +200,7 @@ history_finetune = model.fit(
 # -------
 
 
-# Save the model after fine-tuning
+# Save the model after fine-tuning - DON'T use h5, gives deprecated warnings - binary
 model.save('pneumonia_detection_model_finetuned.keras')
 
 
